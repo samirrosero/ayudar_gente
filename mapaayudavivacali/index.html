@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Mapa de Ayuda Viva — Valle del Cauca</title>
+<meta name="description" content="Mapa comunitario en vivo de necesidades y ayudas disponibles en el Valle del Cauca tras la emergencia: escombros, alimentos, medicamentos, agua, refugio y voluntariado." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🆘</text></svg>" />
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+<style>
+  :root{
+    --bg:#f5f3ef; --panel:#ffffff; --ink:#1c1b19; --ink-dim:#5b5850;
+    --line:#e4e0d8; --accent:#c0392b; --accent-ink:#ffffff;
+    --need:#c0392b; --offer:#1e7d4c; --warn:#a5680a;
+    --shadow:0 6px 20px rgba(0,0,0,.14);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#161513; --panel:#211f1c; --ink:#f3f1ec; --ink-dim:#b7b2a7;
+      --line:#3a362f; --shadow:0 6px 24px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#161513; --panel:#211f1c; --ink:#f3f1ec; --ink-dim:#b7b2a7;
+    --line:#3a362f; --shadow:0 6px 24px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  .hidden{display:none !important}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  a{color:inherit}
+
+  header{
+    display:flex; align-items:center; gap:.75rem; padding:.6rem .9rem;
+    background:var(--panel); border-bottom:1px solid var(--line); z-index:1200;
+    flex-wrap:wrap;
+  }
+  header h1{font-size:1rem; margin:0; font-weight:700; line-height:1.25}
+  header h1 small{display:block; font-weight:500; color:var(--ink-dim); font-size:.72rem}
+  .spacer{flex:1}
+  .status{font-size:.72rem; color:var(--ink-dim); display:flex; align-items:center; gap:.35rem}
+  .dot{width:8px;height:8px;border-radius:50%;background:#9ca3af;display:inline-block}
+  .dot.live{background:var(--offer); box-shadow:0 0 0 3px rgba(30,125,76,.18)}
+  .dot.local{background:var(--warn)}
+  button, .btn{
+    font:inherit; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    padding:.5rem .8rem; border-radius:999px; cursor:pointer; font-weight:600; font-size:.82rem;
+  }
+  button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+  button:active{transform:translateY(1px)}
+
+  .banner{
+    background:#fff4e2; color:#5a3b00; border-bottom:1px solid #e9c27a; padding:.55rem .9rem;
+    font-size:.78rem; line-height:1.4; z-index:1150;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .banner{ background:#3a2c0c; color:#f3d9a0; border-color:#5c471a; }
+  }
+  :root[data-theme="dark"] .banner{ background:#3a2c0c; color:#f3d9a0; border-color:#5c471a; }
+  .banner b{white-space:nowrap}
+
+  main{flex:1; position:relative; display:flex; min-height:0}
+  #map{flex:1; min-width:0}
+  .leaflet-container{background:var(--bg)}
+
+  aside#panel{
+    width:340px; max-width:88vw; background:var(--panel); border-left:1px solid var(--line);
+    display:flex; flex-direction:column; z-index:1000;
+  }
+  aside#panel.hidden{display:none}
+  .panel-header{
+    display:flex; align-items:center; justify-content:space-between; gap:.6rem;
+    padding:.7rem .8rem; border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  .panel-header-title{font-weight:800; font-size:.85rem}
+  .panel-tabs{display:flex; border-bottom:1px solid var(--line)}
+  .panel-tabs button{flex:1; border-radius:0; border:none; border-bottom:2px solid transparent; background:transparent}
+  .panel-tabs button.active{border-bottom-color:var(--accent); color:var(--accent)}
+  .panel-body{flex:1; overflow-y:auto; padding:.75rem .9rem}
+  .filter-group{margin-bottom:1rem}
+  .filter-group h3{font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-dim); margin:.2rem 0 .5rem}
+  .chip{
+    display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .6rem; border-radius:999px;
+    border:1px solid var(--line); font-size:.76rem; margin:0 .35rem .35rem 0; cursor:pointer; user-select:none;
+  }
+  .chip input{display:none}
+  .chip.off{opacity:.4}
+  .card{
+    border:1px solid var(--line); border-radius:12px; padding:.6rem .7rem; margin-bottom:.55rem; cursor:pointer;
+    background:var(--bg); overflow:hidden;
+  }
+  .card:hover{border-color:var(--accent)}
+  .card.resolved{border-color:var(--offer)}
+  .card .row1{display:flex; align-items:center; gap:.4rem; font-size:.78rem; font-weight:700}
+  .card .badge{
+    font-size:.66rem; font-weight:700; padding:.1rem .45rem; border-radius:999px; color:#fff;
+  }
+  .badge.necesita{background:var(--need)}
+  .badge.ofrece{background:var(--offer)}
+  .card p{margin:.3rem 0 0; font-size:.78rem; color:var(--ink-dim); line-height:1.4}
+  .card .meta{margin-top:.35rem; font-size:.68rem; color:var(--ink-dim)}
+  .empty-note{font-size:.8rem; color:var(--ink-dim); padding:1rem .2rem; text-align:center}
+
+  .fab{
+    position:absolute; right:1rem; bottom:1.2rem; z-index:1000;
+    display:flex; align-items:center; gap:.4rem; padding:.75rem 1.05rem; border-radius:999px;
+    background:var(--accent); color:#fff; border:none; box-shadow:var(--shadow); font-weight:800; font-size:.85rem;
+  }
+  .list-toggle{
+    position:absolute; left:1rem; bottom:1.2rem; z-index:1000; box-shadow:var(--shadow);
+  }
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; display:flex; align-items:flex-end;
+    justify-content:center;
+  }
+  .modal-backdrop.hidden{display:none}
+  .modal{
+    background:var(--panel); width:100%; max-width:520px; max-height:92vh;
+    border-radius:16px 16px 0 0; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  @media (min-width:640px){
+    .modal-backdrop{align-items:center}
+    .modal{border-radius:16px}
+  }
+  .modal-header{
+    display:flex; align-items:center; justify-content:space-between; gap:.6rem;
+    padding:1rem 1.1rem .7rem; border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  .modal-header h2{margin:0; font-size:1.05rem}
+  .modal-body{overflow-y:auto; padding:1rem 1.1rem 1.3rem; flex:1; min-height:0}
+  .modal-close{
+    border:none; background:var(--bg); border-radius:50%; width:38px; height:38px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer;
+  }
+  .modal-close .icon{width:1.3em; height:1.3em}
+  .field{margin-bottom:.85rem}
+  .field label{display:block; font-size:.76rem; font-weight:700; color:var(--ink-dim); margin-bottom:.3rem}
+  .field input[type=text], .field input[type=tel], .field textarea, .field select{
+    width:100%; padding:.55rem .65rem; border-radius:10px; border:1px solid var(--line);
+    background:var(--bg); color:var(--ink); font:inherit; font-size:.85rem;
+  }
+  .field textarea{resize:vertical; min-height:64px}
+  .seg{display:flex; gap:.5rem}
+  .seg label{
+    flex:1; text-align:center; border:1px solid var(--line); border-radius:10px; padding:.55rem .4rem;
+    font-size:.82rem; font-weight:700; cursor:pointer; color:var(--ink-dim);
+  }
+  .seg input{display:none}
+  .seg input:checked + span{color:inherit}
+  .seg label:has(input:checked){border-color:var(--accent); color:var(--accent); background:rgba(192,57,43,.08)}
+  .catgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:.5rem}
+  .catbtn{
+    display:flex; align-items:center; gap:.4rem; border:1px solid var(--line); border-radius:10px;
+    padding:.5rem .5rem; cursor:pointer; font-size:.78rem; font-weight:600;
+  }
+  .catbtn input{display:none}
+  .catbtn:has(input:checked){border-color:var(--accent); background:rgba(192,57,43,.08)}
+  .pin-picker{
+    border:1px dashed var(--line); border-radius:10px; padding:.6rem; font-size:.78rem; display:flex;
+    align-items:center; justify-content:space-between; gap:.5rem;
+  }
+  .pin-picker.set{border-style:solid; border-color:var(--offer)}
+  #geocodeResults{margin-top:.35rem; display:flex; flex-direction:column; gap:.25rem}
+  #geocodeResults button{
+    width:100%; text-align:left; border-radius:8px; padding:.45rem .55rem; font-weight:500;
+    background:var(--bg); font-size:.78rem;
+  }
+  .form-actions{display:flex; gap:.6rem; margin-top:.4rem}
+  .form-actions button{flex:1; padding:.7rem}
+  .help-text{font-size:.72rem; color:var(--ink-dim); margin-top:.25rem}
+  .setup-note{
+    font-size:.75rem; background:rgba(160,100,10,.1); border:1px solid var(--warn); color:var(--warn);
+    padding:.5rem .6rem; border-radius:10px; margin-bottom:.85rem;
+  }
+  .locate-btn{
+    width:100%; padding:.75rem; background:var(--offer); color:#fff; border-color:var(--offer);
+    font-size:.88rem;
+  }
+  .locate-btn:disabled{opacity:.6}
+  .link-btn{
+    background:none; border:none; padding:.3rem 0; margin-top:.4rem; text-decoration:underline;
+    color:var(--ink-dim); font-weight:600; font-size:.74rem;
+  }
+  details.field{border:1px solid var(--line); border-radius:10px; padding:.6rem .7rem}
+  details.field summary{cursor:pointer; font-size:.8rem; font-weight:700; color:var(--ink-dim); list-style:none}
+  details.field summary::-webkit-details-marker{display:none}
+  details.field[open] summary{margin-bottom:.6rem}
+  details.field .field:last-child{margin-bottom:0}
+
+
+  .divicon-marker{
+    width:34px;height:34px;border-radius:50% 50% 50% 4px; transform:rotate(45deg);
+    display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.35);
+    border:3px solid #fff;
+  }
+  .divicon-marker span{transform:rotate(-45deg); font-size:16px; line-height:1}
+  .pick-marker{width:22px;height:22px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .divicon-resolved{
+    width:30px;height:30px;border-radius:50%; background:var(--offer); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:15px;
+    box-shadow:0 2px 6px rgba(0,0,0,.35); border:3px solid #fff;
+  }
+
+  .leaflet-popup-content{font-size:.82rem; min-width:190px}
+  .leaflet-popup-content b{display:block; margin-bottom:.15rem}
+  .pop-badge{display:inline-block; font-size:.64rem; font-weight:700; color:#fff; padding:.06rem .4rem; border-radius:999px; margin-bottom:.3rem}
+
+  footer.legend{
+    position:absolute; left:1rem; top:.75rem; z-index:900; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:.4rem .6rem; font-size:.7rem; color:var(--ink-dim); box-shadow:var(--shadow);
+    display:none;
+  }
+  @media (min-width:900px){ footer.legend{display:block} }
+
+  .icon{
+    width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0;
+    fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+  }
+  h1 .icon{width:1.5rem; height:1.5rem; vertical-align:-0.3rem; color:var(--accent)}
+  .banner .icon{color:#a5680a; width:1.1em; height:1.1em}
+  .catbtn .icon, #catFilters .icon, footer.legend .icon{width:1.05em; height:1.05em; margin-right:.15em}
+  .chip .icon{width:.95em; height:.95em; margin-right:.1em}
+  .marker-icon-svg{stroke:#fff; width:16px; height:16px}
+  .pop-badge .icon, .badge .icon{width:.85em; height:.85em; stroke:#fff; margin-right:.15em}
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true">
+<defs>
+<symbol id="i-lifebuoy" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="9"/>
+  <circle cx="12" cy="12" r="4"/>
+  <line x1="12" y1="3" x2="12" y2="8"/>
+  <line x1="12" y1="16" x2="12" y2="21"/>
+  <line x1="3" y1="12" x2="8" y2="12"/>
+  <line x1="16" y1="12" x2="21" y2="12"/>
+</symbol>
+<symbol id="i-alert" viewBox="0 0 24 24">
+  <path d="M12 3 L22 20 L2 20 Z" stroke-linejoin="round"/>
+  <line x1="12" y1="9.5" x2="12" y2="14"/>
+  <circle cx="12" cy="16.8" r="0.6" fill="currentColor" stroke="none"/>
+</symbol>
+<symbol id="i-phone" viewBox="0 0 24 24">
+  <path d="M5.5 3.5 h2.2 l1.6 4.2 -2 1.4 a10.5 10.5 0 0 0 5.6 5.6 l1.4-2 4.2 1.6 v2.2 a2 2 0 0 1-2.2 2 C9 18 3.5 12.5 3.5 5.7 A2 2 0 0 1 5.5 3.5 Z"/>
+</symbol>
+<symbol id="i-plus" viewBox="0 0 24 24">
+  <line x1="12" y1="5" x2="12" y2="19"/>
+  <line x1="5" y1="12" x2="19" y2="12"/>
+</symbol>
+<symbol id="i-menu" viewBox="0 0 24 24">
+  <line x1="4" y1="7" x2="20" y2="7"/>
+  <line x1="4" y1="12" x2="20" y2="12"/>
+  <line x1="4" y1="17" x2="20" y2="17"/>
+</symbol>
+<symbol id="i-help" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="9"/>
+  <line x1="12" y1="7.5" x2="12" y2="13"/>
+  <circle cx="12" cy="16.3" r="0.6" fill="currentColor" stroke="none"/>
+</symbol>
+<symbol id="i-heart" viewBox="0 0 24 24">
+  <path d="M4 10.5 C4 7 7 5 12 9.5 C17 5 20 7 20 10.5 C20 14.5 15 18 12 20.5 C9 18 4 14.5 4 10.5 Z"/>
+</symbol>
+<symbol id="i-check-circle" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="9"/>
+  <polyline points="7.5,12.5 10.5,15.5 16.5,9"/>
+</symbol>
+<symbol id="i-check" viewBox="0 0 24 24">
+  <polyline points="4,13 9.5,18.5 20,6"/>
+</symbol>
+<symbol id="i-trash" viewBox="0 0 24 24">
+  <line x1="4" y1="7" x2="20" y2="7"/>
+  <path d="M9 7 V4.5 h6 V7"/>
+  <path d="M6 7 l1 12.5 a2 2 0 0 0 2 1.8 h6 a2 2 0 0 0 2-1.8 L18 7"/>
+  <line x1="10" y1="10.5" x2="10" y2="16.5"/>
+  <line x1="14" y1="10.5" x2="14" y2="16.5"/>
+</symbol>
+<symbol id="i-bowl" viewBox="0 0 24 24">
+  <line x1="4" y1="9" x2="20" y2="9"/>
+  <path d="M4 9 a8 8 0 0 0 16 0"/>
+  <line x1="9" y1="19" x2="15" y2="19"/>
+  <line x1="12" y1="17" x2="12" y2="19"/>
+</symbol>
+<symbol id="i-medical" viewBox="0 0 24 24">
+  <rect x="3" y="3" width="18" height="18" rx="4"/>
+  <line x1="12" y1="7.5" x2="12" y2="16.5"/>
+  <line x1="7.5" y1="12" x2="16.5" y2="12"/>
+</symbol>
+<symbol id="i-droplet" viewBox="0 0 24 24">
+  <path d="M12 2.5 C12 2.5 5.5 11.5 5.5 15.5 a6.5 6.5 0 0 0 13 0 C18.5 11.5 12 2.5 12 2.5 Z"/>
+</symbol>
+<symbol id="i-home" viewBox="0 0 24 24">
+  <path d="M4 11 L12 4 L20 11"/>
+  <path d="M6 10 V20 h12 V10"/>
+  <line x1="10" y1="20" x2="10" y2="14.5"/>
+  <line x1="14" y1="20" x2="14" y2="14.5"/>
+  <line x1="10" y1="14.5" x2="14" y2="14.5"/>
+</symbol>
+<symbol id="i-users" viewBox="0 0 24 24">
+  <circle cx="8.5" cy="8.5" r="3"/>
+  <path d="M3 20 a5.5 5.5 0 0 1 11 0"/>
+  <circle cx="16.5" cy="9.5" r="2.4"/>
+  <path d="M14.5 20 a4.5 4.2 0 0 1 6.5 -3.6"/>
+</symbol>
+<symbol id="i-shirt" viewBox="0 0 24 24">
+  <path d="M8 3 L3 6.5 L6 10 L8 8.5 V21 h8 V8.5 L18 10 L21 6.5 L16 3 a4 4 0 0 1 -8 0 Z"/>
+</symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24">
+  <path d="M14.5 3.5 a5 5 0 0 0 -6.8 6 L3 14.2 v3 h3 l4.7 -4.7 a5 5 0 0 0 6-6.8 l-3 3 -2.2 -2.2 z"/>
+</symbol>
+<symbol id="i-box" viewBox="0 0 24 24">
+  <path d="M12 3 L20 7 V17 L12 21 L4 17 V7 Z"/>
+  <line x1="4" y1="7" x2="12" y2="11"/>
+  <line x1="20" y1="7" x2="12" y2="11"/>
+  <line x1="12" y1="11" x2="12" y2="21"/>
+</symbol>
+<symbol id="i-pin" viewBox="0 0 24 24">
+  <path d="M12 21 C12 21 5.5 13.5 5.5 9 a6.5 6.5 0 0 1 13 0 C18.5 13.5 12 21 12 21 Z"/>
+  <circle cx="12" cy="9" r="2.2"/>
+</symbol>
+<symbol id="i-crosshair" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="8"/>
+  <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+  <line x1="12" y1="1.5" x2="12" y2="5"/>
+  <line x1="12" y1="19" x2="12" y2="22.5"/>
+  <line x1="1.5" y1="12" x2="5" y2="12"/>
+  <line x1="19" y1="12" x2="22.5" y2="12"/>
+</symbol>
+<symbol id="i-x" viewBox="0 0 24 24">
+  <line x1="5" y1="5" x2="19" y2="19"/>
+  <line x1="19" y1="5" x2="5" y2="19"/>
+</symbol>
+</defs>
+</svg>
+
+<header>
+  <h1><svg class="icon"><use href="#i-lifebuoy"/></svg> Mapa de Ayuda Viva — Valle del Cauca
+    <small>Cali, Buenaventura, Palmira, Tuluá y todo el departamento · red comunitaria de emergencia</small>
+  </h1>
+  <div class="spacer"></div>
+  <div class="status" id="statusIndicator"><span class="dot" id="statusDot"></span><span id="statusText">Cargando…</span></div>
+  <button id="btnEmergencias" title="Números de emergencia"><svg class="icon"><use href="#i-phone"/></svg> Emergencias</button>
+</header>
+
+<div class="banner">
+  <b><svg class="icon"><use href="#i-alert"/></svg> Herramienta comunitaria, no oficial.</b>
+  Verifica la información antes de movilizarte y prioriza siempre las líneas oficiales en una emergencia real:
+  <b>123</b> (Línea Nacional de Emergencias) · <b>119</b> Bomberos · <b>132</b> Cruz Roja · alcaldía de tu municipio / Gestión del Riesgo del Valle del Cauca.
+</div>
+
+<main>
+  <div id="map"></div>
+  <footer class="legend" id="legend"></footer>
+
+  <button class="fab" id="btnOpenForm"><svg class="icon"><use href="#i-plus"/></svg> Reportar en el mapa</button>
+  <button class="btn list-toggle" id="btnToggleList"><svg class="icon"><use href="#i-menu"/></svg> Lista</button>
+
+  <aside id="panel" class="hidden">
+    <div class="panel-header">
+      <span class="panel-header-title">Reportes y filtros</span>
+      <button type="button" class="modal-close" id="btnClosePanel" aria-label="Cerrar panel"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="panel-tabs">
+      <button data-tab="lista" class="active">Reportes en vivo (<span id="countBadge">0</span>)</button>
+      <button data-tab="filtros">Filtros</button>
+    </div>
+    <div class="panel-body hidden" id="tabFiltros">
+      <div class="filter-group">
+        <h3>Tipo</h3>
+        <label class="chip" data-tipo="necesita"><input type="checkbox" checked> <svg class="icon"><use href="#i-help"/></svg> Necesita ayuda</label>
+        <label class="chip" data-tipo="ofrece"><input type="checkbox" checked> <svg class="icon"><use href="#i-heart"/></svg> Ofrece ayuda</label>
+      </div>
+      <div class="filter-group">
+        <h3>Categoría</h3>
+        <div id="catFilters"></div>
+      </div>
+      <div class="filter-group">
+        <label class="chip" id="chipResueltos"><input type="checkbox" checked> <svg class="icon"><use href="#i-check-circle"/></svg> Mostrar puntos ya cubiertos</label>
+      </div>
+    </div>
+    <div class="panel-body" id="tabLista"></div>
+  </aside>
+</main>
+
+<div class="modal-backdrop hidden" id="formBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="formTitle">Nuevo reporte</h2>
+      <button type="button" class="modal-close" id="btnCloseForm" aria-label="Cerrar"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+    <div class="setup-note hidden" id="localModeNote">
+      Este mapa aún no está conectado a una base de datos compartida, así que tu reporte solo
+      se guardará en <b>este navegador</b> (modo demo). Pide al administrador del sitio que
+      complete la configuración de Google Sheets — ver <code>SETUP.md</code> en el repositorio.
+    </div>
+    <form id="reportForm">
+      <div class="field">
+        <label>¿Qué necesitas hacer?</label>
+        <div class="seg">
+          <label><input type="radio" name="tipo" value="necesita" checked><span><svg class="icon"><use href="#i-help"/></svg> Necesito ayuda</span></label>
+          <label><input type="radio" name="tipo" value="ofrece"><span><svg class="icon"><use href="#i-heart"/></svg> Puedo ayudar</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Categoría</label>
+        <div class="catgrid" id="catPicker"></div>
+      </div>
+      <div class="field hidden" id="specifyField">
+        <label id="specifyLabel">¿Qué se necesita exactamente?</label>
+        <input type="text" id="fSpecify" maxlength="120" placeholder="">
+        <div class="help-text">Así quien va a ayudar sabe justo qué llevar, no solo la categoría.</div>
+      </div>
+      <div class="field">
+        <label>Título breve</label>
+        <input type="text" id="fTitulo" maxlength="80" placeholder="Ej: Necesito ayuda para retirar escombros" required>
+      </div>
+
+      <div class="field">
+        <label>Ubicación</label>
+        <button type="button" class="btn locate-btn" id="btnUseMyLocation"><svg class="icon"><use href="#i-pin"/></svg> Usar mi ubicación actual</button>
+        <div class="pin-picker" id="pinPicker">
+          <span id="pinPickerText">Aún no se ha marcado el punto</span>
+        </div>
+        <div class="help-text" id="locateHelp">Comparte tu ubicación en vivo para marcar automáticamente el lugar exacto desde donde reportas.</div>
+        <button type="button" class="link-btn" id="btnManualLocation">¿No estás en el lugar? Márcalo manualmente en el mapa</button>
+
+        <div class="hidden" id="manualLocationBox">
+          <div class="field hidden" id="geocodeField" style="margin-top:.6rem">
+            <label>Buscar dirección o barrio</label>
+            <input type="text" id="fBuscarDireccion" autocomplete="off" placeholder="Ej: Comuna 20, Cali">
+            <div id="geocodeResults"></div>
+          </div>
+          <button type="button" id="btnPickPin" style="margin-top:.6rem"><svg class="icon"><use href="#i-crosshair"/></svg> Elegir tocando el mapa</button>
+        </div>
+      </div>
+
+      <details class="field" id="detailsToggle">
+        <summary>+ Agregar detalles (opcional)</summary>
+        <div class="field">
+          <label>Descripción</label>
+          <textarea id="fDescripcion" maxlength="500" placeholder="Detalles: cuántas personas, qué tipo de ayuda, horarios, etc."></textarea>
+        </div>
+        <div class="field">
+          <label>Barrio / zona</label>
+          <input type="text" id="fZona" maxlength="80" placeholder="Se completa solo al usar tu ubicación">
+        </div>
+        <div class="field">
+          <label>Contacto</label>
+          <input type="text" id="fContacto" maxlength="80" placeholder="WhatsApp o teléfono">
+        </div>
+      </details>
+
+      <div class="form-actions">
+        <button type="button" id="btnCancel">Cancelar</button>
+        <button type="submit" class="primary" id="btnSubmit">Publicar en el mapa</button>
+      </div>
+    </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="emergBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2><svg class="icon"><use href="#i-phone"/></svg> Líneas oficiales de emergencia</h2>
+      <button type="button" class="modal-close" id="btnCloseEmergX" aria-label="Cerrar"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+    <div class="field"><b>123</b> — Línea Nacional de Emergencias (Colombia, funciona en todo el país)</div>
+    <div class="field"><b>119</b> — Bomberos (número nacional unificado)</div>
+    <div class="field"><b>132</b> — Cruz Roja Colombiana</div>
+    <div class="field"><b>#767</b> — Policía Nacional (línea gratuita desde celular)</div>
+    <div class="field">Alcaldía de tu municipio y Unidad Departamental de Gestión del Riesgo de Desastres del Valle del Cauca (canales oficiales de la Gobernación)</div>
+    <div class="help-text">Este mapa comunitario no reemplaza a los organismos oficiales de atención de desastres. Úsalo para coordinar ayuda vecinal y complementar, no sustituir, la respuesta institucional.</div>
+    <div class="form-actions"><button type="button" id="btnCloseEmerg" class="primary">Cerrar</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---- Config & fallback ----
+  var CFG = window.AYUDA_CONFIG || {};
+  var SHEET_API_URL = (CFG.SHEET_API_URL || "").trim();
+  var REFRESH_MS = CFG.REFRESH_MS || 30000;
+  // Todo el departamento del Valle del Cauca (no solo Cali): de Buenaventura en
+  // el Pacífico a Cartago al norte, de Jamundí al sur al límite con Tolima al este.
+  var CITY_CENTER = CFG.CITY_CENTER || [3.9, -76.6];
+  var CITY_ZOOM = CFG.CITY_ZOOM || 9;
+  var DEPT_BOUNDS = CFG.DEPT_BOUNDS || [[3.0, -77.6], [5.05, -75.7]];
+  var LIVE_MODE = SHEET_API_URL.length > 0;
+  var MAPBOX_TOKEN = (CFG.MAPBOX_TOKEN || "").trim();
+  var GEOCODE_MODE = MAPBOX_TOKEN.length > 0;
+
+  function iconSvg(id, extraClass){
+    return '<svg class="icon'+(extraClass?" "+extraClass:"")+'"><use href="#i-'+id+'"/></svg>';
+  }
+
+  var CATEGORIES = [
+    {id:"escombros",    label:"Retiro de escombros",         icon:"trash",   color:"#c0703a"},
+    {id:"alimentos",    label:"Alimentos no perecederos",    icon:"bowl",    color:"#3f8f4f"},
+    {id:"medicamentos", label:"Medicamentos",                icon:"medical", color:"#c0392b"},
+    {id:"agua",         label:"Agua potable",                icon:"droplet", color:"#2f7fc0"},
+    {id:"refugio",      label:"Refugio / Alojamiento",       icon:"home",    color:"#7b4fa0"},
+    {id:"voluntarios",  label:"Mano de obra / Voluntarios",  icon:"users",   color:"#b08c17"},
+    {id:"ropa",         label:"Ropa y cobijas",              icon:"shirt",   color:"#0d8f80"},
+    {id:"herramientas", label:"Herramientas",                icon:"wrench",  color:"#5a6b8c"},
+    {id:"otro",         label:"Otro",                        icon:"box",     color:"#6b6b6b"}
+  ];
+  function catById(id){ return CATEGORIES.find(function(c){return c.id===id;}) || CATEGORIES[CATEGORIES.length-1]; }
+
+  // Categorías donde importa saber el detalle exacto de lo que hace falta
+  // (para que quien va a ayudar sepa qué llevar, no solo la categoría general).
+  var SPECIFY_CONFIG = {
+    medicamentos: { label: "¿Qué medicamentos se necesitan?", placeholder: "Ej: Acetaminofén, suero oral, insulina, curitas..." },
+    herramientas: { label: "¿Qué herramientas se necesitan?", placeholder: "Ej: Pala, carretilla, taladro, machete, guantes..." },
+    alimentos:    { label: "¿Qué alimentos se necesitan?", placeholder: "Ej: Arroz, atún enlatado, leche en polvo, panela..." },
+    ropa:         { label: "¿Qué se necesita? (ropa, cobijas, tallas)", placeholder: "Ej: Cobijas, ropa de niño talla 8, botas de caucho..." },
+    otro:         { label: "¿Qué tipo de ayuda es?", placeholder: "Ej: transporte, cuidado de mascotas, apoyo psicológico..." }
+  };
+
+  // ---- Local storage fallback (demo mode) ----
+  var LS_KEY = "ayuda_viva_cali_reportes";
+  function lsGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }catch(e){ return []; } }
+  function lsSave(list){ localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+  function lsAdd(record){ var l = lsGet(); l.unshift(record); lsSave(l); return record; }
+
+  // ---- Barra lateral: visible de una vez en pantallas anchas (escritorio/tablet),
+  // como cajón desplegable en celular (poco espacio para mapa + panel a la vez).
+  function isWideScreen(){ return window.innerWidth >= 900; }
+  if(isWideScreen()){ document.getElementById("panel").classList.remove("hidden"); }
+
+  // ---- Map setup ----
+  var map = L.map("map", {zoomControl:false});
+  if(DEPT_BOUNDS){ map.fitBounds(DEPT_BOUNDS); } else { map.setView(CITY_CENTER, CITY_ZOOM); }
+  L.control.zoom({position:"bottomright"}).addTo(map);
+  if (MAPBOX_TOKEN) {
+    L.tileLayer("https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}{r}?access_token={accessToken}", {
+      maxZoom: 19,
+      tileSize: 512,
+      zoomOffset: -1,
+      id: "mapbox/streets-v12",
+      accessToken: MAPBOX_TOKEN,
+      attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+  } else {
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+  }
+  var markersLayer = L.layerGroup().addTo(map);
+
+  function makeIcon(cat, tipo, estado){
+    if(estado === "resuelto"){
+      return L.divIcon({
+        className: "",
+        html: '<div class="divicon-resolved">'+iconSvg("check","marker-icon-svg")+'</div>',
+        iconSize: [30,30], iconAnchor:[15,15], popupAnchor:[0,-18]
+      });
+    }
+    var ring = tipo === "necesita" ? "#c0392b" : "#1e7d4c";
+    return L.divIcon({
+      className: "",
+      html: '<div class="divicon-marker" style="background:'+cat.color+';border-color:'+ring+'"><span>'+iconSvg(cat.icon,"marker-icon-svg")+'</span></div>',
+      iconSize: [34,34], iconAnchor:[17,30], popupAnchor:[0,-28]
+    });
+  }
+
+  // ---- State ----
+  var records = [];
+  var activeTipos = {necesita:true, ofrece:true};
+  var activeCats = {}; CATEGORIES.forEach(function(c){ activeCats[c.id]=true; });
+  var showResolved = true; // los puntos ya cubiertos se ven en verde por defecto, no se ocultan
+  var pickedLatLng = null;
+  var pickingActive = false;
+
+  function timeAgo(iso){
+    var d = new Date(iso); if(isNaN(d)) return "";
+    var s = Math.round((Date.now()-d.getTime())/1000);
+    if(s<60) return "hace segundos";
+    var m=Math.round(s/60); if(m<60) return "hace "+m+" min";
+    var h=Math.round(m/60); if(h<24) return "hace "+h+" h";
+    var days=Math.round(h/24); return "hace "+days+" d";
+  }
+
+  function visibleRecords(){
+    return records.filter(function(r){
+      if(!activeTipos[r.tipo]) return false;
+      if(!activeCats[r.categoria]) return false;
+      var resolved = r.estado === "resuelto";
+      if(resolved && !showResolved) return false;
+      return true;
+    }).sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); });
+  }
+
+  function render(){
+    markersLayer.clearLayers();
+    var list = visibleRecords();
+    list.forEach(function(r){
+      if(r.lat==null || r.lon==null) return;
+      var cat = catById(r.categoria);
+      var resolved = r.estado === "resuelto";
+      var marker = L.marker([r.lat, r.lon], {icon: makeIcon(cat, r.tipo, r.estado)});
+      var badgeClass = resolved ? "ofrece" : (r.tipo === "necesita" ? "necesita" : "ofrece");
+      var badgeText = resolved ? (iconSvg("check")+" Ya está cubierto") : (r.tipo === "necesita" ? (iconSvg("help")+" Necesita ayuda") : (iconSvg("heart")+" Ofrece ayuda"));
+      marker.bindPopup(
+        '<span class="pop-badge '+badgeClass+'" style="background:'+(resolved?"#1e7d4c":(r.tipo==="necesita"?"#c0392b":"#1e7d4c"))+'">'+badgeText+'</span>'+
+        '<b>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</b>'+
+        (r.descripcion ? '<div>'+escapeHtml(r.descripcion)+'</div>' : '') +
+        (r.zona ? '<div style="margin-top:.3rem;color:#777">'+iconSvg("pin")+' '+escapeHtml(r.zona)+'</div>' : '') +
+        (r.contacto ? '<div style="margin-top:.2rem">'+iconSvg("phone")+' '+escapeHtml(r.contacto)+'</div>' : '') +
+        '<div style="margin-top:.3rem;font-size:.7rem;color:#999">'+cat.label+' · '+timeAgo(r.ts)+'</div>'
+      );
+      markersLayer.addLayer(marker);
+    });
+    renderList(list);
+    document.getElementById("countBadge").textContent = list.length;
+  }
+
+  function escapeHtml(s){
+    return String(s||"").replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function renderList(list){
+    var el = document.getElementById("tabLista");
+    if(!list.length){
+      el.innerHTML = '<div class="empty-note">Aún no hay reportes con estos filtros.<br>Sé el primero en publicar uno con el botón “Reportar en el mapa”.</div>';
+      return;
+    }
+    el.innerHTML = "";
+    list.forEach(function(r){
+      var cat = catById(r.categoria);
+      var resolved = r.estado === "resuelto";
+      var card = document.createElement("div");
+      card.className = "card" + (resolved ? " resolved" : "");
+      card.innerHTML =
+        '<div class="row1"><span class="badge '+(resolved?"ofrece":(r.tipo==="necesita"?"necesita":"ofrece"))+'">'+(resolved?(iconSvg("check")+" CUBIERTO"):(r.tipo==="necesita"?"NECESITA":"OFRECE"))+'</span>'+
+        '<span>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</span></div>'+
+        (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '') +
+        '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>';
+      card.addEventListener("click", function(){
+        if(r.lat!=null && r.lon!=null){ map.flyTo([r.lat, r.lon], 16); }
+        // En celular la barra tapa el mapa, así que se cierra al elegir un reporte.
+        // En pantallas anchas se queda abierta: es la barra lateral permanente.
+        if(!isWideScreen()){ document.getElementById("panel").classList.add("hidden"); }
+      });
+      el.appendChild(card);
+    });
+  }
+
+  // ---- Data loading ----
+  function setStatus(mode, text){
+    var dot = document.getElementById("statusDot");
+    dot.className = "dot " + (mode==="live" ? "live" : mode==="local" ? "local" : "");
+    document.getElementById("statusText").textContent = text;
+  }
+
+  function loadRecords(){
+    if(LIVE_MODE){
+      setStatus("loading", "Actualizando…");
+      fetch(SHEET_API_URL + "?action=list&_=" + Date.now())
+        .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+        .then(function(data){
+          records = Array.isArray(data) ? data : (data.records || []);
+          render();
+          setStatus("live", "En vivo · " + new Date().toLocaleTimeString("es-CO"));
+        })
+        .catch(function(err){
+          console.error("Error cargando datos en vivo:", err);
+          setStatus("", "Sin conexión con la hoja compartida");
+        });
+    } else {
+      records = lsGet();
+      render();
+      setStatus("local", "Modo demo local (sin conexión compartida)");
+    }
+  }
+
+  // ---- Filters UI ----
+  var catFiltersEl = document.getElementById("catFilters");
+  var legendEl = document.getElementById("legend");
+  CATEGORIES.forEach(function(c){
+    var label = document.createElement("label");
+    label.className = "chip";
+    label.innerHTML = '<input type="checkbox" checked> '+iconSvg(c.icon)+' '+c.label;
+    label.querySelector("input").addEventListener("change", function(e){
+      activeCats[c.id] = e.target.checked;
+      label.classList.toggle("off", !e.target.checked);
+      render();
+    });
+    catFiltersEl.appendChild(label);
+    legendEl.innerHTML += '<div>'+iconSvg(c.icon)+' '+c.label+'</div>';
+  });
+  document.querySelectorAll(".chip[data-tipo]").forEach(function(chip){
+    chip.querySelector("input").addEventListener("change", function(e){
+      activeTipos[chip.dataset.tipo] = e.target.checked;
+      chip.classList.toggle("off", !e.target.checked);
+      render();
+    });
+  });
+  document.getElementById("chipResueltos").querySelector("input").addEventListener("change", function(e){
+    showResolved = e.target.checked;
+    render();
+  });
+
+  // ---- Category picker in form ----
+  var catPickerEl = document.getElementById("catPicker");
+  var specifyField = document.getElementById("specifyField");
+  var specifyLabel = document.getElementById("specifyLabel");
+  var fSpecify = document.getElementById("fSpecify");
+  CATEGORIES.forEach(function(c, i){
+    var label = document.createElement("label");
+    label.className = "catbtn";
+    label.innerHTML = '<input type="radio" name="categoria" value="'+c.id+'" '+(i===0?"checked":"")+'> '+iconSvg(c.icon)+' '+c.label;
+    label.querySelector("input").addEventListener("change", function(){
+      var cfg = SPECIFY_CONFIG[c.id];
+      specifyField.classList.toggle("hidden", !cfg);
+      if(cfg){
+        specifyLabel.textContent = cfg.label;
+        fSpecify.placeholder = cfg.placeholder;
+      }
+    });
+    catPickerEl.appendChild(label);
+  });
+
+  // ---- Panel tabs ----
+  document.querySelectorAll(".panel-tabs button").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".panel-tabs button").forEach(function(b){b.classList.remove("active");});
+      btn.classList.add("active");
+      document.getElementById("tabFiltros").classList.toggle("hidden", btn.dataset.tab!=="filtros");
+      document.getElementById("tabLista").classList.toggle("hidden", btn.dataset.tab!=="lista");
+    });
+  });
+  document.getElementById("btnToggleList").addEventListener("click", function(){
+    document.getElementById("panel").classList.toggle("hidden");
+    // el mapa cambia de ancho al mostrar/ocultar la barra: hay que avisarle a Leaflet
+    setTimeout(function(){ map.invalidateSize(); }, 0);
+  });
+  document.getElementById("btnClosePanel").addEventListener("click", function(){
+    document.getElementById("panel").classList.add("hidden");
+    setTimeout(function(){ map.invalidateSize(); }, 0);
+  });
+
+  // ---- Emergency modal ----
+  function closeEmergModal(){
+    document.getElementById("emergBackdrop").classList.add("hidden");
+  }
+  document.getElementById("btnEmergencias").addEventListener("click", function(){
+    document.getElementById("emergBackdrop").classList.remove("hidden");
+  });
+  document.getElementById("btnCloseEmerg").addEventListener("click", closeEmergModal);
+  document.getElementById("btnCloseEmergX").addEventListener("click", closeEmergModal);
+  document.getElementById("emergBackdrop").addEventListener("click", function(e){
+    if(e.target === e.currentTarget) closeEmergModal();
+  });
+
+  // ---- Report form ----
+  var formBackdrop = document.getElementById("formBackdrop");
+  var pinPicker = document.getElementById("pinPicker");
+  var pinPickerText = document.getElementById("pinPickerText");
+  var pickMarker = null;
+
+  function openForm(){
+    document.getElementById("localModeNote").classList.toggle("hidden", LIVE_MODE);
+    formBackdrop.classList.remove("hidden");
+  }
+  function closeForm(){
+    formBackdrop.classList.add("hidden");
+    pickingActive = false;
+    map.getContainer().style.cursor = "";
+  }
+  document.getElementById("btnOpenForm").addEventListener("click", openForm);
+  document.getElementById("btnCancel").addEventListener("click", closeForm);
+  document.getElementById("btnCloseForm").addEventListener("click", closeForm);
+  formBackdrop.addEventListener("click", function(e){
+    if(e.target === e.currentTarget) closeForm();
+  });
+
+  document.getElementById("btnPickPin").addEventListener("click", function(){
+    pickingActive = true;
+    formBackdrop.classList.add("hidden");
+    map.getContainer().style.cursor = "crosshair";
+  });
+
+  document.getElementById("btnManualLocation").addEventListener("click", function(){
+    var box = document.getElementById("manualLocationBox");
+    var willShow = box.classList.contains("hidden");
+    box.classList.toggle("hidden");
+    this.textContent = willShow ? "Ocultar el mapa manual" : "¿No estás en el lugar? Márcalo manualmente en el mapa";
+  });
+
+  function reverseGeocode(latlng){
+    if(!GEOCODE_MODE) return;
+    var url = "https://api.mapbox.com/geocoding/v5/mapbox.places/" + latlng.lng + "," + latlng.lat + ".json"
+      + "?access_token=" + encodeURIComponent(MAPBOX_TOKEN)
+      + "&language=es&limit=1&types=neighborhood,locality,place,address";
+    fetch(url)
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(data){
+        var f = data.features && data.features[0];
+        if(f){ document.getElementById("fZona").value = f.place_name; }
+      })
+      .catch(function(err){ console.error("Error en geocodificación inversa:", err); });
+  }
+
+  function setPickedLocation(latlng, opts){
+    pickedLatLng = latlng;
+    if(pickMarker){
+      pickMarker.setLatLng(latlng);
+    } else {
+      pickMarker = L.marker(latlng, {
+        draggable: true,
+        icon: L.divIcon({className:"", html:'<div class="pick-marker"></div>', iconSize:[22,22], iconAnchor:[11,11]})
+      }).addTo(map);
+      pickMarker.on("dragend", function(){
+        setPickedLocation(pickMarker.getLatLng(), {silent:true});
+      });
+    }
+    pinPickerText.innerHTML = iconSvg("pin") + " Ubicación marcada (" + latlng.lat.toFixed(5) + ", " + latlng.lng.toFixed(5) + ") · puedes arrastrarla para ajustarla";
+    pinPicker.classList.add("set");
+    reverseGeocode(latlng);
+    if(!opts || !opts.silent){
+      pickingActive = false;
+      map.getContainer().style.cursor = "";
+    }
+  }
+
+  document.getElementById("btnUseMyLocation").addEventListener("click", function(){
+    var btn = this;
+    if(!navigator.geolocation){
+      alert("Tu navegador no soporta compartir tu ubicación automáticamente. Usa la opción de marcarla manualmente en el mapa, abajo.");
+      return;
+    }
+    var originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = iconSvg("pin") + " Obteniendo tu ubicación…";
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      map.flyTo(latlng, 17);
+      setPickedLocation(latlng);
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }, function(err){
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+      alert("No se pudo obtener tu ubicación automáticamente (" + err.message + "). Puedes marcarla manualmente en el mapa, abajo.");
+    }, {enableHighAccuracy:true, timeout:12000, maximumAge:0});
+  });
+
+  map.on("click", function(e){
+    if(!pickingActive) return;
+    setPickedLocation(e.latlng);
+    openForm();
+  });
+
+  // ---- Buscador de dirección (Mapbox Geocoding, opcional) ----
+  if(GEOCODE_MODE){
+    document.getElementById("geocodeField").classList.remove("hidden");
+    var geocodeInput = document.getElementById("fBuscarDireccion");
+    var geocodeResultsEl = document.getElementById("geocodeResults");
+    var geocodeTimer = null;
+
+    geocodeInput.addEventListener("input", function(){
+      var q = geocodeInput.value.trim();
+      clearTimeout(geocodeTimer);
+      geocodeResultsEl.innerHTML = "";
+      if(q.length < 3) return;
+      geocodeTimer = setTimeout(function(){ runGeocode(q); }, 350);
+    });
+
+    function runGeocode(query){
+      var url = "https://api.mapbox.com/geocoding/v5/mapbox.places/" + encodeURIComponent(query) + ".json"
+        + "?access_token=" + encodeURIComponent(MAPBOX_TOKEN)
+        + "&language=es&country=CO&limit=5"
+        + "&proximity=" + CITY_CENTER[1] + "," + CITY_CENTER[0]
+        + "&bbox=-77.6,3.0,-75.7,5.05"; // caja aproximada de todo el Valle del Cauca
+      fetch(url)
+        .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+        .then(function(data){
+          geocodeResultsEl.innerHTML = "";
+          (data.features || []).forEach(function(f){
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.innerHTML = iconSvg("pin") + " " + escapeHtml(f.place_name);
+            btn.addEventListener("click", function(){
+              var lonLat = f.center; // Mapbox devuelve [lon, lat]
+              var latlng = L.latLng(lonLat[1], lonLat[0]);
+              map.flyTo(latlng, 17);
+              setPickedLocation(latlng);
+              geocodeResultsEl.innerHTML = "";
+              geocodeInput.value = f.place_name;
+            });
+            geocodeResultsEl.appendChild(btn);
+          });
+        })
+        .catch(function(err){
+          console.error("Error buscando dirección:", err);
+          geocodeResultsEl.innerHTML = '<div class="help-text">No se pudo buscar la dirección. Puedes marcar el punto directamente en el mapa.</div>';
+        });
+    }
+  }
+
+  document.getElementById("reportForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    if(!pickedLatLng){
+      alert("Por favor comparte tu ubicación (o márcala en el mapa) antes de publicar.");
+      return;
+    }
+    var tipo = document.querySelector('input[name="tipo"]:checked').value;
+    var categoria = document.querySelector('input[name="categoria"]:checked').value;
+    var titulo = document.getElementById("fTitulo").value.trim();
+    if(!titulo){ alert("Escribe un título breve."); return; }
+
+    var descripcion = document.getElementById("fDescripcion").value.trim();
+    if(SPECIFY_CONFIG[categoria]){
+      var specifyTexto = fSpecify.value.trim();
+      if(specifyTexto){ descripcion = "Se necesita: " + specifyTexto + (descripcion ? ". " + descripcion : ""); }
+    }
+
+    var record = {
+      id: "r" + Date.now() + Math.random().toString(36).slice(2,7),
+      ts: new Date().toISOString(),
+      tipo: tipo,
+      categoria: categoria,
+      titulo: titulo,
+      descripcion: descripcion,
+      zona: document.getElementById("fZona").value.trim(),
+      lat: pickedLatLng.lat,
+      lon: pickedLatLng.lng,
+      contacto: document.getElementById("fContacto").value.trim(),
+      estado: "activo"
+    };
+
+    var btn = document.getElementById("btnSubmit");
+    btn.disabled = true; btn.textContent = "Publicando…";
+
+    function afterSuccess(){
+      closeForm();
+      document.getElementById("reportForm").reset();
+      if(pickMarker){ map.removeLayer(pickMarker); pickMarker=null; }
+      pickedLatLng = null;
+      pinPickerText.textContent = "Aún no se ha marcado el punto";
+      pinPicker.classList.remove("set");
+      document.getElementById("manualLocationBox").classList.add("hidden");
+      document.getElementById("btnManualLocation").textContent = "¿No estás en el lugar? Márcalo manualmente en el mapa";
+      specifyField.classList.add("hidden");
+      fSpecify.value = "";
+      if(GEOCODE_MODE){ document.getElementById("geocodeResults").innerHTML = ""; }
+      btn.disabled = false; btn.textContent = "Publicar en el mapa";
+      loadRecords();
+    }
+
+    if(LIVE_MODE){
+      fetch(SHEET_API_URL, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"}, // evita preflight CORS con Apps Script
+        body: JSON.stringify(record)
+      }).then(function(r){ return r.json(); })
+        .then(function(resp){
+          if(resp && resp.ok === false) throw new Error(resp.error || "Error desconocido");
+          afterSuccess();
+        })
+        .catch(function(err){
+          console.error(err);
+          alert("No se pudo publicar en la hoja compartida. Se guardará localmente como respaldo.");
+          lsAdd(record);
+          afterSuccess();
+        });
+    } else {
+      lsAdd(record);
+      afterSuccess();
+    }
+  });
+
+  // ---- Init ----
+  loadRecords();
+  if(LIVE_MODE){ setInterval(loadRecords, REFRESH_MS); }
+})();
+</script>
+</body>
+</html>
