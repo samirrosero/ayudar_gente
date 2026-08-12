@@ -218,6 +218,8 @@
     margin-top:.4rem; width:100%; font-size:.72rem; padding:.35rem .5rem;
     background:var(--offer); color:#fff; border-color:var(--offer); border-radius:8px;
   }
+  @keyframes spin{ to{transform:rotate(360deg)} }
+  .spinning{ animation:spin .8s linear infinite; display:inline-block; }
 
   .leaflet-popup-content{font-size:.82rem; min-width:190px}
   .leaflet-popup-content b{display:block; margin-bottom:.15rem}
@@ -348,6 +350,12 @@
   <line x1="5" y1="5" x2="19" y2="19"/>
   <line x1="19" y1="5" x2="5" y2="19"/>
 </symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24">
+  <path d="M4 4v5h5"/>
+  <path d="M20 20v-5h-5"/>
+  <path d="M20 9a8 8 0 0 0-14.9-2"/>
+  <path d="M4 15a8 8 0 0 0 14.9 2"/>
+</symbol>
 </defs>
 </svg>
 
@@ -357,7 +365,7 @@
   </h1>
   <div class="spacer"></div>
   <div class="status" id="statusIndicator"><span class="dot" id="statusDot"></span><span id="statusText">Cargando…</span></div>
-  <button id="btnRefresh" title="Actualizar reportes ahora"><svg class="icon"><use href="#i-check"/></svg> Actualizar</button>
+  <button id="btnRefresh" title="Actualizar reportes ahora"><svg class="icon" id="refreshIcon"><use href="#i-refresh"/></svg> Actualizar</button>
   <button id="btnEmergencias" title="Números de emergencia"><svg class="icon"><use href="#i-phone"/></svg> Emergencias</button>
 </header>
 
@@ -865,9 +873,11 @@
   // ---- Refresh button ----
   document.getElementById("btnRefresh").addEventListener("click", function(){
     var btn = this;
+    var ico = document.getElementById("refreshIcon");
     btn.disabled = true;
+    ico.classList.add("spinning");
     loadRecords();
-    setTimeout(function(){ btn.disabled = false; }, 2000);
+    setTimeout(function(){ btn.disabled = false; ico.classList.remove("spinning"); }, 2000);
   });
 
   // ---- Emergency modal ----
