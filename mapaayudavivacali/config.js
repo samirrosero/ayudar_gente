@@ -14,7 +14,7 @@
 window.AYUDA_CONFIG = {
   SHEET_API_URL: "https://quiet-base-ba8b.samir-armero16.workers.dev", // Ej: "https://script.google.com/macros/s/AKfycb.../exec"
   MAPBOX_TOKEN: "pk.eyJ1Ijoic2hyb3Nlcm8iLCJhIjoiY21zcW12azAyMHJlMzMwcHd1MXkwbG5jMSJ9.YjU_XhypnDQH9LdXEJijJg",
-  REFRESH_MS: 120000, // cada cuánto se refresca el mapa (milisegundos)
+  REFRESH_MS: 30000, // cada cuánto se refresca el mapa (milisegundos)
   CITY_CENTER: [3.4516, -76.5320], // Cali, Valle del Cauca
   CITY_ZOOM: 12
 };
