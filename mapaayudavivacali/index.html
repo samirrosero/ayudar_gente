@@ -225,6 +225,12 @@
     background:transparent; color:var(--need); border-color:var(--need); border-radius:8px;
   }
   .delete-btn:hover{ background:var(--need); color:#fff; }
+  .goto-btn{
+    display:block; margin-top:.3rem; width:100%; font-size:.72rem; padding:.35rem .5rem;
+    background:#4285f4; color:#fff; border:none; border-radius:8px; cursor:pointer;
+    text-align:center; text-decoration:none; box-sizing:border-box;
+  }
+  .goto-btn:hover{ background:#2a6fd6; }
 
   .leaflet-popup-content{font-size:.82rem; min-width:190px}
   .leaflet-popup-content b{display:block; margin-bottom:.15rem}
@@ -719,6 +725,7 @@
         (r.zona ? '<div style="margin-top:.3rem;color:#777">'+iconSvg("pin")+' '+escapeHtml(r.zona)+'</div>' : '') +
         (r.contacto ? '<div style="margin-top:.2rem">'+iconSvg("phone")+' '+escapeHtml(r.contacto)+'</div>' : '') +
         '<div style="margin-top:.3rem;font-size:.7rem;color:#999">'+cat.label+' · '+timeAgo(r.ts)+'</div>'+
+        '<a href="https://www.google.com/maps/dir/?api=1&destination='+r.lat+','+r.lon+'" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;width:100%;padding:.35rem;background:#4285f4;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.75rem;font-weight:700;text-align:center;text-decoration:none">🗺 Cómo llegar (Google Maps)</a>'+
         resolveBtn+deleteBtn
       );
       markersLayer.addLayer(marker);
@@ -783,9 +790,11 @@
         (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '') +
         '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>'+
         (!resolved && LIVE_MODE ? '<button class="resolve-btn" data-id="'+r.id+'">✓ Marcar como cubierto / estable</button>' : '')+
-        '<button class="delete-btn" data-del="'+r.id+'">🗑 Ya no necesito / Eliminar reporte</button>';
+        '<button class="delete-btn" data-del="'+r.id+'">🗑 Ya no necesito / Eliminar reporte</button>'+
+        (r.lat!=null && r.lon!=null ? '<a class="goto-btn" href="https://www.google.com/maps/dir/?api=1&destination='+r.lat+','+r.lon+'" target="_blank" rel="noopener">🗺 Cómo llegar (Google Maps)</a>' : '');
       card.addEventListener("click", function(e){
-        if(e.target.classList.contains("resolve-btn")) return; // manejado por su propio listener
+        if(e.target.classList.contains("resolve-btn")) return;
+        if(e.target.classList.contains("goto-btn")) return;
         if(r.lat!=null && r.lon!=null){ map.flyTo([r.lat, r.lon], 16); }
         if(!isWideScreen()){ document.getElementById("panel").classList.add("hidden"); }
       });
@@ -793,6 +802,8 @@
       if(rBtn){ rBtn.addEventListener("click", function(e){ e.stopPropagation(); window.resolveRecord(r.id); }); }
       var dBtn = card.querySelector(".delete-btn");
       if(dBtn){ dBtn.addEventListener("click", function(e){ e.stopPropagation(); window.deleteRecord(r.id); }); }
+      var gBtn = card.querySelector(".goto-btn");
+      if(gBtn){ gBtn.addEventListener("click", function(e){ e.stopPropagation(); }); }
       el.appendChild(card);
     });
   }
