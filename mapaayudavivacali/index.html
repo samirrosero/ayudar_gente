@@ -207,6 +207,17 @@
     display:flex; align-items:center; justify-content:center; font-size:15px;
     box-shadow:0 2px 6px rgba(0,0,0,.35); border:3px solid #fff;
   }
+  @keyframes pulse-critico{
+    0%{box-shadow:0 0 0 0 rgba(192,57,43,.75),0 2px 6px rgba(0,0,0,.35)}
+    70%{box-shadow:0 0 0 14px rgba(192,57,43,0),0 2px 6px rgba(0,0,0,.35)}
+    100%{box-shadow:0 0 0 0 rgba(192,57,43,0),0 2px 6px rgba(0,0,0,.35)}
+  }
+  .divicon-critico{animation:pulse-critico 1.3s ease-out infinite;border-color:#ff1a1a !important;border-width:4px !important}
+  .badge.critico{background:#8b0000}
+  .resolve-btn{
+    margin-top:.4rem; width:100%; font-size:.72rem; padding:.35rem .5rem;
+    background:var(--offer); color:#fff; border-color:var(--offer); border-radius:8px;
+  }
 
   .leaflet-popup-content{font-size:.82rem; min-width:190px}
   .leaflet-popup-content b{display:block; margin-bottom:.15rem}
@@ -346,6 +357,7 @@
   </h1>
   <div class="spacer"></div>
   <div class="status" id="statusIndicator"><span class="dot" id="statusDot"></span><span id="statusText">Cargando…</span></div>
+  <button id="btnRefresh" title="Actualizar reportes ahora"><svg class="icon"><use href="#i-check"/></svg> Actualizar</button>
   <button id="btnEmergencias" title="Números de emergencia"><svg class="icon"><use href="#i-phone"/></svg> Emergencias</button>
 </header>
 
@@ -411,6 +423,13 @@
         <div class="seg">
           <label><input type="radio" name="tipo" value="necesita" checked><span><svg class="icon"><use href="#i-help"/></svg> Necesito ayuda</span></label>
           <label><input type="radio" name="tipo" value="ofrece"><span><svg class="icon"><use href="#i-heart"/></svg> Puedo ayudar</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Nivel de urgencia</label>
+        <div class="seg">
+          <label><input type="radio" name="urgencia" value="normal" checked><span>Normal</span></label>
+          <label><input type="radio" name="urgencia" value="critico"><span>⚠️ Urgente / Crítico</span></label>
         </div>
       </div>
       <div class="field">
@@ -581,7 +600,7 @@
   }
   var markersLayer = L.layerGroup().addTo(map);
 
-  function makeIcon(cat, tipo, estado){
+  function makeIcon(cat, tipo, estado, urgencia){
     if(estado === "resuelto"){
       return L.divIcon({
         className: "",
@@ -590,9 +609,11 @@
       });
     }
     var ring = tipo === "necesita" ? "#c0392b" : "#1e7d4c";
+    var critico = urgencia === "critico";
+    var extraClass = critico ? " divicon-critico" : "";
     return L.divIcon({
       className: "",
-      html: '<div class="divicon-marker" style="background:'+cat.color+';border-color:'+ring+'"><span>'+iconSvg(cat.icon,"marker-icon-svg")+'</span></div>',
+      html: '<div class="divicon-marker'+extraClass+'" style="background:'+cat.color+';border-color:'+ring+'"><span>'+iconSvg(cat.icon,"marker-icon-svg")+'</span></div>',
       iconSize: [34,34], iconAnchor:[17,30], popupAnchor:[0,-28]
     });
   }
@@ -650,16 +671,19 @@
       if(r.lat==null || r.lon==null) return;
       var cat = catById(r.categoria);
       var resolved = r.estado === "resuelto";
-      var marker = L.marker([r.lat, r.lon], {icon: makeIcon(cat, r.tipo, r.estado)});
+      var marker = L.marker([r.lat, r.lon], {icon: makeIcon(cat, r.tipo, r.estado, r.urgencia)});
       var badgeClass = resolved ? "ofrece" : (r.tipo === "necesita" ? "necesita" : "ofrece");
       var badgeText = resolved ? (iconSvg("check")+" Ya está cubierto") : (r.tipo === "necesita" ? (iconSvg("help")+" Necesita ayuda") : (iconSvg("heart")+" Ofrece ayuda"));
+      var critBadge = (!resolved && r.urgencia === "critico") ? '<span class="pop-badge" style="background:#8b0000;margin-left:.3rem">⚠️ CRÍTICO</span>' : "";
+      var resolveBtn = (!resolved && LIVE_MODE) ? '<button onclick="window.resolveRecord(\''+r.id+'\')" style="margin-top:.5rem;width:100%;padding:.35rem;background:#1e7d4c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.75rem;font-weight:700">✓ Marcar como cubierto / estable</button>' : "";
       marker.bindPopup(
-        '<span class="pop-badge '+badgeClass+'" style="background:'+(resolved?"#1e7d4c":(r.tipo==="necesita"?"#c0392b":"#1e7d4c"))+'">'+badgeText+'</span>'+
+        '<span class="pop-badge '+badgeClass+'" style="background:'+(resolved?"#1e7d4c":(r.tipo==="necesita"?"#c0392b":"#1e7d4c"))+'">'+badgeText+'</span>'+critBadge+
         '<b>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</b>'+
         (r.descripcion ? '<div>'+escapeHtml(r.descripcion)+'</div>' : '') +
         (r.zona ? '<div style="margin-top:.3rem;color:#777">'+iconSvg("pin")+' '+escapeHtml(r.zona)+'</div>' : '') +
         (r.contacto ? '<div style="margin-top:.2rem">'+iconSvg("phone")+' '+escapeHtml(r.contacto)+'</div>' : '') +
-        '<div style="margin-top:.3rem;font-size:.7rem;color:#999">'+cat.label+' · '+timeAgo(r.ts)+'</div>'
+        '<div style="margin-top:.3rem;font-size:.7rem;color:#999">'+cat.label+' · '+timeAgo(r.ts)+'</div>'+
+        resolveBtn
       );
       markersLayer.addLayer(marker);
     });
@@ -685,20 +709,43 @@
       var resolved = r.estado === "resuelto";
       var card = document.createElement("div");
       card.className = "card" + (resolved ? " resolved" : "");
+      var critBadgeCard = (!resolved && r.urgencia === "critico") ? '<span class="badge critico">⚠️ CRÍTICO</span> ' : "";
       card.innerHTML =
-        '<div class="row1"><span class="badge '+(resolved?"ofrece":(r.tipo==="necesita"?"necesita":"ofrece"))+'">'+(resolved?(iconSvg("check")+" CUBIERTO"):(r.tipo==="necesita"?"NECESITA":"OFRECE"))+'</span>'+
+        '<div class="row1">'+critBadgeCard+'<span class="badge '+(resolved?"ofrece":(r.tipo==="necesita"?"necesita":"ofrece"))+'">'+(resolved?(iconSvg("check")+" CUBIERTO"):(r.tipo==="necesita"?"NECESITA":"OFRECE"))+'</span>'+
         '<span>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</span></div>'+
         (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '') +
-        '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>';
-      card.addEventListener("click", function(){
+        '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>'+
+        (!resolved && LIVE_MODE ? '<button class="resolve-btn" data-id="'+r.id+'">✓ Marcar como cubierto / estable</button>' : '');
+      card.addEventListener("click", function(e){
+        if(e.target.classList.contains("resolve-btn")) return; // manejado por su propio listener
         if(r.lat!=null && r.lon!=null){ map.flyTo([r.lat, r.lon], 16); }
-        // En celular la barra tapa el mapa, así que se cierra al elegir un reporte.
-        // En pantallas anchas se queda abierta: es la barra lateral permanente.
         if(!isWideScreen()){ document.getElementById("panel").classList.add("hidden"); }
       });
+      var rBtn = card.querySelector(".resolve-btn");
+      if(rBtn){ rBtn.addEventListener("click", function(e){ e.stopPropagation(); window.resolveRecord(r.id); }); }
       el.appendChild(card);
     });
   }
+
+  // ---- Marcar como cubierto ----
+  window.resolveRecord = function(id){
+    if(!id) return;
+    if(!LIVE_MODE){
+      var list = lsGet();
+      lsSave(list.map(function(r){ if(r.id===id) r.estado="resuelto"; return r; }));
+      loadRecords(); return;
+    }
+    fetch(SHEET_API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({action:"resolve", id:id})
+    }).then(function(r){ return r.json(); })
+      .then(function(resp){
+        if(resp && resp.ok) loadRecords();
+        else alert("No se pudo marcar como cubierto: "+(resp.error||"error desconocido"));
+      })
+      .catch(function(){ alert("Sin conexión con el servidor."); });
+  };
 
   // ---- Data loading ----
   function setStatus(mode, text){
@@ -813,6 +860,14 @@
   document.getElementById("btnClosePanel").addEventListener("click", function(){
     document.getElementById("panel").classList.add("hidden");
     setTimeout(function(){ map.invalidateSize(); }, 0);
+  });
+
+  // ---- Refresh button ----
+  document.getElementById("btnRefresh").addEventListener("click", function(){
+    var btn = this;
+    btn.disabled = true;
+    loadRecords();
+    setTimeout(function(){ btn.disabled = false; }, 2000);
   });
 
   // ---- Emergency modal ----
@@ -991,6 +1046,7 @@
       if(specifyTexto){ descripcion = "Se necesita: " + specifyTexto + (descripcion ? ". " + descripcion : ""); }
     }
 
+    var urgencia = document.querySelector('input[name="urgencia"]:checked').value;
     var record = {
       id: "r" + Date.now() + Math.random().toString(36).slice(2,7),
       ts: new Date().toISOString(),
@@ -1002,6 +1058,7 @@
       lat: pickedLatLng.lat,
       lon: pickedLatLng.lng,
       contacto: document.getElementById("fContacto").value.trim(),
+      urgencia: urgencia,
       estado: "activo",
       fp: FP,
       website: document.getElementById("fHoneypot").value // honeypot

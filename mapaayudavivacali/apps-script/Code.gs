@@ -17,7 +17,7 @@
  */
 
 var SHEET_NAME = "reportes";
-var HEADERS = ["id", "ts", "tipo", "categoria", "titulo", "descripcion", "zona", "lat", "lon", "contacto", "estado"];
+var HEADERS = ["id", "ts", "tipo", "categoria", "titulo", "descripcion", "zona", "lat", "lon", "contacto", "urgencia", "estado"];
 
 // Límite anti-spam: máximo de reportes por usuario (fingerprint) en una ventana de tiempo.
 var SPAM_WINDOW_MS = 10 * 60 * 1000; // 10 minutos
@@ -56,6 +56,11 @@ function doPost(e) {
   try {
     var body = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
 
+    // Marcar reporte como resuelto (cubierto)
+    if (body.action === "resolve") {
+      return resolveRecord_(body.id);
+    }
+
     // Honeypot: el campo "website" debe llegar vacío desde el formulario real
     if (body.website && String(body.website).trim() !== "") {
       return jsonResponse_({ ok: true, id: "ignored" }); // respuesta silenciosa al bot
@@ -71,6 +76,23 @@ function doPost(e) {
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
   }
+}
+
+function resolveRecord_(id) {
+  if (!id) return jsonResponse_({ ok: false, error: "id requerido" });
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return jsonResponse_({ ok: false, error: "registro no encontrado" });
+  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+  var idIdx = HEADERS.indexOf("id");
+  var estadoIdx = HEADERS.indexOf("estado");
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][idIdx]) === String(id)) {
+      sheet.getRange(i + 2, estadoIdx + 1).setValue("resuelto");
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, error: "registro no encontrado" });
 }
 
 function checkRateLimit_(fp) {
@@ -112,6 +134,7 @@ function validateAndNormalize_(body) {
     lat: lat,
     lon: lon,
     contacto: String(body.contacto || "").slice(0, 200),
+    urgencia: String(body.urgencia || "normal") === "critico" ? "critico" : "normal",
     estado: "activo"
   };
 }
