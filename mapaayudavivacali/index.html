@@ -220,6 +220,11 @@
   }
   @keyframes spin{ to{transform:rotate(360deg)} }
   .spinning{ animation:spin .8s linear infinite; display:inline-block; }
+  .delete-btn{
+    margin-top:.3rem; width:100%; font-size:.72rem; padding:.35rem .5rem;
+    background:transparent; color:var(--need); border-color:var(--need); border-radius:8px;
+  }
+  .delete-btn:hover{ background:var(--need); color:#fff; }
 
   .leaflet-popup-content{font-size:.82rem; min-width:190px}
   .leaflet-popup-content b{display:block; margin-bottom:.15rem}
@@ -392,6 +397,14 @@
       <button data-tab="filtros">Filtros</button>
     </div>
     <div class="panel-body hidden" id="tabFiltros">
+      <div class="filter-group">
+        <h3>Tiempo</h3>
+        <div id="timeFilters"></div>
+      </div>
+      <div class="filter-group">
+        <h3>Prioridad</h3>
+        <label class="chip" id="chipCriticos"><input type="checkbox"> ⚠️ Solo urgentes / críticos</label>
+      </div>
       <div class="filter-group">
         <h3>Ciudad / Municipio</h3>
         <div id="ciudadFilters"></div>
@@ -644,6 +657,8 @@
   var activeCats = {}; CATEGORIES.forEach(function(c){ activeCats[c.id]=true; });
   var showResolved = true; // los puntos ya cubiertos se ven en verde por defecto, no se ocultan
   var activeCiudad = "todas";
+  var activeTimeFilter = "todos";
+  var showOnlyCritico = false;
   var pickedLatLng = null;
   var pickingActive = false;
 
@@ -668,6 +683,16 @@
         if(r.lat == null || r.lon == null) return false;
         if(r.lat < b[0][0] || r.lat > b[1][0] || r.lon < b[0][1] || r.lon > b[1][1]) return false;
       }
+      if(activeTimeFilter !== "todos"){
+        var TF = {
+          "1h":   60*60*1000,
+          "5min": 5*60*1000,
+          "1min": 60*1000
+        };
+        var ms = TF[activeTimeFilter];
+        if(ms && (Date.now() - new Date(r.ts).getTime()) > ms) return false;
+      }
+      if(showOnlyCritico && r.urgencia !== "critico") return false;
       return true;
     }).sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); });
   }
@@ -684,6 +709,7 @@
       var badgeText = resolved ? (iconSvg("check")+" Ya está cubierto") : (r.tipo === "necesita" ? (iconSvg("help")+" Necesita ayuda") : (iconSvg("heart")+" Ofrece ayuda"));
       var critBadge = (!resolved && r.urgencia === "critico") ? '<span class="pop-badge" style="background:#8b0000;margin-left:.3rem">⚠️ CRÍTICO</span>' : "";
       var resolveBtn = (!resolved && LIVE_MODE) ? '<button onclick="window.resolveRecord(\''+r.id+'\')" style="margin-top:.5rem;width:100%;padding:.35rem;background:#1e7d4c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.75rem;font-weight:700">✓ Marcar como cubierto / estable</button>' : "";
+      var deleteBtn = '<button onclick="window.deleteRecord(\''+r.id+'\')" style="margin-top:.3rem;width:100%;padding:.3rem;background:transparent;color:#c0392b;border:1px solid #c0392b;border-radius:8px;cursor:pointer;font-size:.72rem">🗑 Ya no necesito ayuda / Eliminar reporte</button>';
       marker.bindPopup(
         '<span class="pop-badge '+badgeClass+'" style="background:'+(resolved?"#1e7d4c":(r.tipo==="necesita"?"#c0392b":"#1e7d4c"))+'">'+badgeText+'</span>'+critBadge+
         '<b>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</b>'+
@@ -691,7 +717,7 @@
         (r.zona ? '<div style="margin-top:.3rem;color:#777">'+iconSvg("pin")+' '+escapeHtml(r.zona)+'</div>' : '') +
         (r.contacto ? '<div style="margin-top:.2rem">'+iconSvg("phone")+' '+escapeHtml(r.contacto)+'</div>' : '') +
         '<div style="margin-top:.3rem;font-size:.7rem;color:#999">'+cat.label+' · '+timeAgo(r.ts)+'</div>'+
-        resolveBtn
+        resolveBtn+deleteBtn
       );
       markersLayer.addLayer(marker);
     });
@@ -723,7 +749,8 @@
         '<span>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</span></div>'+
         (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '') +
         '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>'+
-        (!resolved && LIVE_MODE ? '<button class="resolve-btn" data-id="'+r.id+'">✓ Marcar como cubierto / estable</button>' : '');
+        (!resolved && LIVE_MODE ? '<button class="resolve-btn" data-id="'+r.id+'">✓ Marcar como cubierto / estable</button>' : '')+
+        '<button class="delete-btn" data-del="'+r.id+'">🗑 Ya no necesito / Eliminar reporte</button>';
       card.addEventListener("click", function(e){
         if(e.target.classList.contains("resolve-btn")) return; // manejado por su propio listener
         if(r.lat!=null && r.lon!=null){ map.flyTo([r.lat, r.lon], 16); }
@@ -731,9 +758,31 @@
       });
       var rBtn = card.querySelector(".resolve-btn");
       if(rBtn){ rBtn.addEventListener("click", function(e){ e.stopPropagation(); window.resolveRecord(r.id); }); }
+      var dBtn = card.querySelector(".delete-btn");
+      if(dBtn){ dBtn.addEventListener("click", function(e){ e.stopPropagation(); window.deleteRecord(r.id); }); }
       el.appendChild(card);
     });
   }
+
+  // ---- Eliminar reporte ----
+  window.deleteRecord = function(id){
+    if(!id) return;
+    if(!confirm("¿Eliminar este reporte del mapa? Esta acción no se puede deshacer.")) return;
+    if(!LIVE_MODE){
+      lsSave(lsGet().filter(function(r){ return r.id !== id; }));
+      loadRecords(); return;
+    }
+    fetch(SHEET_API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({action:"delete", id:id})
+    }).then(function(r){ return r.json(); })
+      .then(function(resp){
+        if(resp && resp.ok) loadRecords();
+        else alert("No se pudo eliminar: "+(resp.error||"error desconocido"));
+      })
+      .catch(function(){ alert("Sin conexión con el servidor."); });
+  };
 
   // ---- Marcar como cubierto ----
   window.resolveRecord = function(id){
@@ -782,6 +831,35 @@
       setStatus("local", "Modo demo local (sin conexión compartida)");
     }
   }
+
+  // ---- Time filter UI ----
+  var TIME_FILTERS = [
+    {id:"todos", label:"Todos"},
+    {id:"1h",    label:"Última hora"},
+    {id:"5min",  label:"5 minutos"},
+    {id:"1min",  label:"1 minuto"}
+  ];
+  var timeFiltersEl = document.getElementById("timeFilters");
+  TIME_FILTERS.forEach(function(tf){
+    var label = document.createElement("label");
+    label.className = "chip" + (tf.id !== "todos" ? " off" : "");
+    label.dataset.time = tf.id;
+    label.innerHTML = '<input type="radio" name="tiempo" value="'+tf.id+'" '+(tf.id==="todos"?"checked":"")+"> "+tf.label;
+    label.querySelector("input").addEventListener("change", function(e){
+      if(!e.target.checked) return;
+      activeTimeFilter = tf.id;
+      document.querySelectorAll(".chip[data-time]").forEach(function(ch){
+        ch.classList.toggle("off", ch.dataset.time !== tf.id);
+      });
+      render();
+    });
+    timeFiltersEl.appendChild(label);
+  });
+  document.getElementById("chipCriticos").querySelector("input").addEventListener("change", function(e){
+    showOnlyCritico = e.target.checked;
+    document.getElementById("chipCriticos").classList.toggle("off", !e.target.checked);
+    render();
+  });
 
   // ---- City filter UI ----
   var ciudadFiltersEl = document.getElementById("ciudadFilters");

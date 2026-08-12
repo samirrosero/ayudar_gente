@@ -61,6 +61,11 @@ function doPost(e) {
       return resolveRecord_(body.id);
     }
 
+    // Eliminar reporte
+    if (body.action === "delete") {
+      return deleteRecord_(body.id);
+    }
+
     // Honeypot: el campo "website" debe llegar vacío desde el formulario real
     if (body.website && String(body.website).trim() !== "") {
       return jsonResponse_({ ok: true, id: "ignored" }); // respuesta silenciosa al bot
@@ -159,6 +164,22 @@ function listRecords_() {
       obj.lon = Number(obj.lon);
       return obj;
     });
+}
+
+function deleteRecord_(id) {
+  if (!id) return jsonResponse_({ ok: false, error: "id requerido" });
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return jsonResponse_({ ok: false, error: "registro no encontrado" });
+  var idIdx = HEADERS.indexOf("id");
+  var ids = sheet.getRange(2, idIdx + 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) {
+      sheet.deleteRow(i + 2);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, error: "registro no encontrado" });
 }
 
 function jsonResponse_(data) {
