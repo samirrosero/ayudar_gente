@@ -19,6 +19,9 @@
 var SHEET_NAME = "reportes";
 var HEADERS = ["id", "ts", "tipo", "categoria", "titulo", "descripcion", "zona", "lat", "lon", "contacto", "urgencia", "estado"];
 
+var RESP_SHEET_NAME = "respuestas";
+var RESP_HEADERS = ["id", "report_id", "ts", "texto"];
+
 // Límite anti-spam: máximo de reportes por usuario (fingerprint) en una ventana de tiempo.
 var SPAM_WINDOW_MS = 10 * 60 * 1000; // 10 minutos
 var SPAM_MAX = 5;                      // máximo 5 reportes en esa ventana
@@ -64,6 +67,11 @@ function doPost(e) {
     // Eliminar reporte
     if (body.action === "delete") {
       return deleteRecord_(body.id);
+    }
+
+    // Agregar respuesta a un reporte
+    if (body.action === "responder") {
+      return addRespuesta_(body);
     }
 
     // Honeypot: el campo "website" debe llegar vacío desde el formulario real
@@ -155,15 +163,56 @@ function listRecords_() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   var values = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-  return values
-    .filter(function (row) { return row[0] !== ""; }) // ignora filas vacías
+  var records = values
+    .filter(function (row) { return row[0] !== ""; })
     .map(function (row) {
       var obj = {};
       HEADERS.forEach(function (h, i) { obj[h] = row[i]; });
       obj.lat = Number(obj.lat);
       obj.lon = Number(obj.lon);
+      obj.respuestas = [];
       return obj;
     });
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var respSheet = ss.getSheetByName(RESP_SHEET_NAME);
+  if (respSheet && respSheet.getLastRow() > 1) {
+    var respValues = respSheet.getRange(2, 1, respSheet.getLastRow() - 1, RESP_HEADERS.length).getValues();
+    var respMap = {};
+    respValues.filter(function (r) { return r[0] !== ""; }).forEach(function (r) {
+      var obj = {};
+      RESP_HEADERS.forEach(function (h, i) { obj[h] = r[i]; });
+      var rid = String(obj.report_id);
+      if (!respMap[rid]) respMap[rid] = [];
+      respMap[rid].push({ id: String(obj.id), ts: String(obj.ts), texto: String(obj.texto) });
+    });
+    records.forEach(function (rec) { rec.respuestas = respMap[String(rec.id)] || []; });
+  }
+  return records;
+}
+
+function getRespSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(RESP_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(RESP_SHEET_NAME);
+    sheet.appendRow(RESP_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function addRespuesta_(body) {
+  if (!body.report_id) return jsonResponse_({ ok: false, error: "report_id requerido" });
+  var sheet = getRespSheet_();
+  var row = {
+    id: "resp" + new Date().getTime(),
+    report_id: String(body.report_id),
+    ts: new Date().toISOString(),
+    texto: String(body.texto || "").slice(0, 300)
+  };
+  sheet.appendRow(RESP_HEADERS.map(function (h) { return row[h]; }));
+  return jsonResponse_({ ok: true, id: row.id });
 }
 
 function deleteRecord_(id) {
