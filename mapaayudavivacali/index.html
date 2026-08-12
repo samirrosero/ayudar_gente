@@ -556,7 +556,7 @@
       </div>
       <button onclick="document.getElementById('respModal').style.display='none'" style="background:none;border:none;font-size:1.3rem;cursor:pointer;padding:.1rem .3rem;margin-left:.5rem;color:#555">✕</button>
     </div>
-    <div id="respList" style="margin-bottom:.7rem;max-height:220px;overflow-y:auto"></div>
+    <div id="respList" style="margin-bottom:.7rem;max-height:340px;overflow-y:auto;padding-right:.2rem"></div>
     <div style="border-top:1px solid #eee;padding-top:.7rem">
       <textarea id="respText" maxlength="300" placeholder="Comentario opcional: ¿qué puedes llevar, cuándo puedes ir, sugerencias…?" style="width:100%;min-height:64px;border:1px solid #ddd;border-radius:8px;padding:.5rem;font-size:.82rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
       <button id="respSubmitBtn" style="margin-top:.5rem;width:100%;padding:.55rem;background:#1e7d4c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:.84rem">✓ Enviar respuesta</button>
@@ -1317,12 +1317,15 @@
     var resps = r.respuestas || [];
     var listEl = document.getElementById("respList");
     if(!resps.length){
-      listEl.innerHTML = '<div style="color:#999;font-size:.8rem;text-align:center;padding:.6rem 0">Aún no hay respuestas. ¡Sé el primero en responder!</div>';
+      listEl.innerHTML = '<div style="color:#888;font-size:.82rem;text-align:center;padding:.8rem 0">Aún no hay respuestas. ¡Sé el primero!</div>';
     } else {
       listEl.innerHTML = resps.map(function(resp){
-        return '<div style="padding:.4rem 0;border-bottom:1px solid #f0f0f0">'+
-          (resp.texto ? '<div style="font-size:.82rem">'+escapeHtml(resp.texto)+'</div>' : '<div style="font-size:.78rem;color:#1e7d4c">✓ Puede ayudar</div>')+
-          '<div style="color:#aaa;font-size:.68rem;margin-top:.1rem">'+timeAgo(resp.ts)+'</div>'+
+        var sinTexto = !resp.texto || !resp.texto.trim();
+        return '<div style="background:#f7faf8;border-left:3px solid #1e7d4c;border-radius:0 8px 8px 0;padding:.55rem .7rem;margin-bottom:.5rem">'+
+          (sinTexto
+            ? '<div style="font-size:.82rem;font-weight:700;color:#1e7d4c">✓ Puede ayudar</div>'
+            : '<div style="font-size:.84rem;color:#1a1a1a;line-height:1.4">'+escapeHtml(resp.texto)+'</div>')+
+          '<div style="font-size:.68rem;color:#888;margin-top:.25rem">'+timeAgo(resp.ts)+'</div>'+
           '</div>';
       }).join('');
     }
