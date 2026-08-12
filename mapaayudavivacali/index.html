@@ -743,7 +743,7 @@
       marker.bindPopup(
         '<span class="pop-badge '+badgeClass+'" style="background:'+(resolved?"#1e7d4c":(r.tipo==="necesita"?"#c0392b":"#1e7d4c"))+'">'+badgeText+'</span>'+critBadge+
         '<b>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</b>'+
-        (r.descripcion ? '<div>'+escapeHtml(r.descripcion)+'</div>' : '') +
+        (r.descripcion ? '<div>'+escapeHtml(displayDesc(r))+'</div>' : '') +
         (r.zona ? '<div style="margin-top:.3rem;color:#777">'+iconSvg("pin")+' '+escapeHtml(r.zona)+'</div>' : '') +
         (r.contacto ? '<div style="margin-top:.2rem">'+iconSvg("phone")+' '+escapeHtml(r.contacto)+'</div>' : '') +
         '<div style="margin-top:.3rem;font-size:.7rem;color:#999">'+cat.label+' · '+timeAgo(r.ts)+'</div>'+
@@ -778,7 +778,7 @@
         (critico && !resolved ? '<span class="badge critico">⚠️ CRÍTICO</span> ' : '')+
         '<span class="badge '+(resolved?"ofrece":(r.tipo==="necesita"?"necesita":"ofrece"))+'">'+(resolved?"✓ CUBIERTO":(r.tipo==="necesita"?"NECESITA":"OFRECE"))+'</span> '+
         '<span>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</span></div>'+
-        (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '')+
+        (r.descripcion ? '<p>'+escapeHtml(displayDesc(r))+'</p>' : '')+
         '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>';
       card.addEventListener("click", function(){
         if(r.lat!=null && r.lon!=null){ map.flyTo([r.lat, r.lon], 16); }
@@ -786,6 +786,13 @@
       });
       el.appendChild(card);
     });
+  }
+
+  function displayDesc(r){
+    var d = String(r.descripcion || "");
+    if(r.tipo === "ofrece" && d.indexOf("Se necesita: ") === 0)
+      d = "Puedo llevar: " + d.slice("Se necesita: ".length);
+    return d;
   }
 
   function escapeHtml(s){
@@ -811,7 +818,7 @@
       card.innerHTML =
         '<div class="row1">'+critBadgeCard+'<span class="badge '+(resolved?"ofrece":(r.tipo==="necesita"?"necesita":"ofrece"))+'">'+(resolved?(iconSvg("check")+" CUBIERTO"):(r.tipo==="necesita"?"NECESITA":"OFRECE"))+'</span>'+
         '<span>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</span></div>'+
-        (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '') +
+        (r.descripcion ? '<p>'+escapeHtml(displayDesc(r))+'</p>' : '') +
         '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>'+
         (!resolved && LIVE_MODE ? '<button class="resolve-btn" data-id="'+r.id+'">✓ Marcar como cubierto / estable</button>' : '')+
         '<button class="delete-btn" data-del="'+r.id+'">🗑 Ya no necesito / Eliminar reporte</button>'+
