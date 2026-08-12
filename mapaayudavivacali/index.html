@@ -393,7 +393,8 @@
       <button type="button" class="modal-close" id="btnClosePanel" aria-label="Cerrar panel"><svg class="icon"><use href="#i-x"/></svg></button>
     </div>
     <div class="panel-tabs">
-      <button data-tab="lista" class="active">Reportes en vivo (<span id="countBadge">0</span>)</button>
+      <button data-tab="lista" class="active">En vivo (<span id="countBadge">0</span>)</button>
+      <button data-tab="historial">Historial (<span id="histBadge">0</span>)</button>
       <button data-tab="filtros">Filtros</button>
     </div>
     <div class="panel-body hidden" id="tabFiltros">
@@ -423,6 +424,7 @@
       </div>
     </div>
     <div class="panel-body" id="tabLista"></div>
+    <div class="panel-body hidden" id="tabHistorial"></div>
   </aside>
 </main>
 
@@ -723,6 +725,37 @@
     });
     renderList(list);
     document.getElementById("countBadge").textContent = list.length;
+    renderHistorial();
+  }
+
+  function renderHistorial(){
+    var el = document.getElementById("tabHistorial");
+    var all = records.slice().sort(function(a,b){ return new Date(b.ts)-new Date(a.ts); });
+    document.getElementById("histBadge").textContent = all.length;
+    if(!all.length){
+      el.innerHTML = '<div class="empty-note">Aún no hay reportes en el historial.</div>';
+      return;
+    }
+    el.innerHTML = "";
+    all.forEach(function(r){
+      var cat = catById(r.categoria);
+      var resolved = r.estado === "resuelto";
+      var critico = r.urgencia === "critico";
+      var card = document.createElement("div");
+      card.className = "card" + (resolved ? " resolved" : "");
+      card.innerHTML =
+        '<div class="row1">'+
+        (critico && !resolved ? '<span class="badge critico">⚠️ CRÍTICO</span> ' : '')+
+        '<span class="badge '+(resolved?"ofrece":(r.tipo==="necesita"?"necesita":"ofrece"))+'">'+(resolved?"✓ CUBIERTO":(r.tipo==="necesita"?"NECESITA":"OFRECE"))+'</span> '+
+        '<span>'+iconSvg(cat.icon)+' '+escapeHtml(r.titulo)+'</span></div>'+
+        (r.descripcion ? '<p>'+escapeHtml(r.descripcion)+'</p>' : '')+
+        '<div class="meta">'+cat.label+(r.zona?" · "+escapeHtml(r.zona):"")+' · '+timeAgo(r.ts)+'</div>';
+      card.addEventListener("click", function(){
+        if(r.lat!=null && r.lon!=null){ map.flyTo([r.lat, r.lon], 16); }
+        if(!isWideScreen()){ document.getElementById("panel").classList.add("hidden"); }
+      });
+      el.appendChild(card);
+    });
   }
 
   function escapeHtml(s){
@@ -936,6 +969,7 @@
       btn.classList.add("active");
       document.getElementById("tabFiltros").classList.toggle("hidden", btn.dataset.tab!=="filtros");
       document.getElementById("tabLista").classList.toggle("hidden", btn.dataset.tab!=="lista");
+      document.getElementById("tabHistorial").classList.toggle("hidden", btn.dataset.tab!=="historial");
     });
   });
   document.getElementById("btnToggleList").addEventListener("click", function(){
