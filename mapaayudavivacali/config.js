@@ -12,14 +12,9 @@
 // token público restringido a tu dominio (ver SETUP.md) — nunca un token
 // secreto ("sk.").
 window.AYUDA_CONFIG = {
-  SHEET_API_URL: "https://script.google.com/macros/s/AKfycbxOMHq1SWWl6-2Bvf9--cTaj0BgFWT6_qitzm_h8cMxS5lAwaEw_9Z_8Z6iGCU1dOoRvA/exec", // Ej: "https://script.google.com/macros/s/AKfycb.../exec"
+  SHEET_API_URL: "https://quiet-base-ba8b.samir-armero16.workers.dev", // Ej: "https://script.google.com/macros/s/AKfycb.../exec"
   MAPBOX_TOKEN: "", // Ej: "pk.eyJ1Ijoi..." — pega tu token público aquí SOLO en tu copia local, nunca lo subas a git
-  REFRESH_MS: 30000, // cada cuánto se refresca el mapa (milisegundos)
-  CITY_CENTER: [3.9, -76.6], // centro del Valle del Cauca (no solo Cali)
-  CITY_ZOOM: 9,
-  // Encuadre inicial del mapa: todo el departamento del Valle del Cauca
-  // (Buenaventura al oeste, Cartago al norte, Jamundí al sur). Si prefieres
-  // que el mapa arranque enfocado solo en una ciudad, borra DEPT_BOUNDS y el
-  // mapa usará CITY_CENTER + CITY_ZOOM en su lugar.
-  DEPT_BOUNDS: [[3.0, -77.6], [5.05, -75.7]]
+  REFRESH_MS: 120000, // cada cuánto se refresca el mapa (milisegundos)
+  CITY_CENTER: [3.4516, -76.5320], // Cali, Valle del Cauca
+  CITY_ZOOM: 12
 };

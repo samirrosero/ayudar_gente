@@ -458,6 +458,9 @@
         </div>
       </details>
 
+      <!-- honeypot: oculto para humanos, los bots lo llenan -->
+      <input type="text" name="website" id="fHoneypot" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+
       <div class="form-actions">
         <button type="button" id="btnCancel">Cancelar</button>
         <button type="submit" class="primary" id="btnSubmit">Publicar en el mapa</button>
@@ -499,7 +502,7 @@
   // el Pacífico a Cartago al norte, de Jamundí al sur al límite con Tolima al este.
   var CITY_CENTER = CFG.CITY_CENTER || [3.9, -76.6];
   var CITY_ZOOM = CFG.CITY_ZOOM || 9;
-  var DEPT_BOUNDS = CFG.DEPT_BOUNDS || [[3.0, -77.6], [5.05, -75.7]];
+  var DEPT_BOUNDS = CFG.DEPT_BOUNDS || null;
   var LIVE_MODE = SHEET_API_URL.length > 0;
   var MAPBOX_TOKEN = (CFG.MAPBOX_TOKEN || "").trim();
   var GEOCODE_MODE = MAPBOX_TOKEN.length > 0;
@@ -530,6 +533,17 @@
     ropa:         { label: "¿Qué se necesita? (ropa, cobijas, tallas)", placeholder: "Ej: Cobijas, ropa de niño talla 8, botas de caucho..." },
     otro:         { label: "¿Qué tipo de ayuda es?", placeholder: "Ej: transporte, cuidado de mascotas, apoyo psicológico..." }
   };
+
+  // Fingerprint ligero (no invasivo) para rate limiting en el backend.
+  // Solo combina datos ya disponibles en el navegador, sin almacenar nada personal.
+  function getFingerprint(){
+    var parts = [navigator.language, screen.width, screen.height, screen.colorDepth,
+                 new Date().getTimezoneOffset(), navigator.hardwareConcurrency||0];
+    var s = parts.join("|"), h = 0;
+    for(var i=0;i<s.length;i++){ h = ((h<<5)-h)+s.charCodeAt(i); h|=0; }
+    return (h>>>0).toString(36);
+  }
+  var FP = getFingerprint();
 
   // ---- Local storage fallback (demo mode) ----
   var LS_KEY = "ayuda_viva_cali_reportes";
@@ -944,7 +958,9 @@
       lat: pickedLatLng.lat,
       lon: pickedLatLng.lng,
       contacto: document.getElementById("fContacto").value.trim(),
-      estado: "activo"
+      estado: "activo",
+      fp: FP,
+      website: document.getElementById("fHoneypot").value // honeypot
     };
 
     var btn = document.getElementById("btnSubmit");

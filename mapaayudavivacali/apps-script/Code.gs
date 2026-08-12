@@ -19,6 +19,13 @@
 var SHEET_NAME = "reportes";
 var HEADERS = ["id", "ts", "tipo", "categoria", "titulo", "descripcion", "zona", "lat", "lon", "contacto", "estado"];
 
+// Límite anti-spam: máximo de reportes por usuario (fingerprint) en una ventana de tiempo.
+var SPAM_WINDOW_MS = 10 * 60 * 1000; // 10 minutos
+var SPAM_MAX = 5;                      // máximo 5 reportes en esa ventana
+
+// Bounds del Valle del Cauca (holgados para incluir zonas de borde del departamento)
+var BOUNDS = { latMin: 2.8, latMax: 5.2, lonMin: -77.8, lonMax: -75.5 };
+
 function getSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_NAME);
@@ -48,12 +55,35 @@ function doGet(e) {
 function doPost(e) {
   try {
     var body = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
+
+    // Honeypot: el campo "website" debe llegar vacío desde el formulario real
+    if (body.website && String(body.website).trim() !== "") {
+      return jsonResponse_({ ok: true, id: "ignored" }); // respuesta silenciosa al bot
+    }
+
+    if (!checkRateLimit_(body.fp)) {
+      return jsonResponse_({ ok: false, error: "Demasiados reportes en poco tiempo. Espera unos minutos." });
+    }
+
     var record = validateAndNormalize_(body);
     appendRecord_(record);
     return jsonResponse_({ ok: true, id: record.id });
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
   }
+}
+
+function checkRateLimit_(fp) {
+  if (!fp) return true; // sin fingerprint, dejamos pasar (el campo es opcional)
+  var key = "rl_" + String(fp).replace(/[^a-zA-Z0-9]/g, "").slice(0, 40);
+  var cache = CacheService.getScriptCache();
+  var raw = cache.get(key);
+  var entry = raw ? JSON.parse(raw) : { count: 0, since: Date.now() };
+  var now = Date.now();
+  if (now - entry.since > SPAM_WINDOW_MS) { entry = { count: 0, since: now }; }
+  entry.count++;
+  cache.put(key, JSON.stringify(entry), Math.ceil(SPAM_WINDOW_MS / 1000));
+  return entry.count <= SPAM_MAX;
 }
 
 function validateAndNormalize_(body) {
@@ -67,6 +97,9 @@ function validateAndNormalize_(body) {
   if (!categoria) throw new Error("categoria requerida");
   if (!titulo) throw new Error("titulo requerido");
   if (isNaN(lat) || isNaN(lon)) throw new Error("ubicación (lat/lon) requerida");
+  if (lat < BOUNDS.latMin || lat > BOUNDS.latMax || lon < BOUNDS.lonMin || lon > BOUNDS.lonMax) {
+    throw new Error("ubicación fuera del Valle del Cauca");
+  }
 
   return {
     id: String(body.id || ("r" + new Date().getTime())),
